@@ -11,6 +11,7 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from ackermann_msgs.msg import AckermannDriveStamped
 from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
 from vs_msgs.msg import ConeLocation, ConeLocationPixel
 
 #The following collection of pixel locations and corresponding relative
@@ -19,12 +20,13 @@ from vs_msgs.msg import ConeLocation, ConeLocationPixel
 # PTS_IMAGE_PLANE units are in pixels
 # see README.md for coordinate frame description
 
+# POINTS WERE GATHERED IN A CLOCKWISE MANNER, STARTING FROM THE TOP LEFT CORNER OF THE PAPER
 ######################################################
 ## DUMMY POINTS -- ENTER YOUR MEASUREMENTS HERE
-PTS_IMAGE_PLANE = [[-1, -1],
-                   [-1, -1],
-                   [-1, -1],
-                   [-1, -1]] # dummy points
+PTS_IMAGE_PLANE = [[270.0, 255.0],
+                   [436.0, 254.0],
+                   [509.0, 325.0],
+                   [244.0, 328.0]] # dummy points
 ######################################################
 
 # PTS_GROUND_PLANE units are in inches
@@ -32,10 +34,10 @@ PTS_IMAGE_PLANE = [[-1, -1],
 
 ######################################################
 ## DUMMY POINTS -- ENTER YOUR MEASUREMENTS HERE
-PTS_GROUND_PLANE = [[-1, -1],
-                    [-1, -1],
-                    [-1, -1],
-                    [-1, -1]] # dummy points
+PTS_GROUND_PLANE = [[22, 3.25],
+                    [22, -7.75],
+                    [13.5, -7.75],
+                    [13.5, 3.25]] # dummy points
 ######################################################
 
 METERS_PER_INCH = 0.0254
@@ -48,6 +50,12 @@ class HomographyTransformer(Node):
         self.cone_pub = self.create_publisher(ConeLocation, "/relative_cone", 10)
         self.marker_pub = self.create_publisher(Marker, "/cone_marker", 1)
         self.cone_px_sub = self.create_subscription(ConeLocationPixel, "/relative_cone_px", self.cone_detection_callback, 1)
+        
+        # Subscribe to mouse clicks for testing the homography
+        self.mouse_sub = self.create_subscription(
+            Point, "/zed/zed_node/rgb/image_rect_color_mouse_left", 
+            self.mouse_click_callback, 10)
+        self.get_logger().info("Subscribed to mouse clicks for homography testing")
 
         if not len(PTS_GROUND_PLANE) == len(PTS_IMAGE_PLANE):
             rclpy.logerr("ERROR: PTS_GROUND_PLANE and PTS_IMAGE_PLANE should be of same length")
@@ -103,25 +111,46 @@ class HomographyTransformer(Node):
         y = homogeneous_xy[1, 0]
         return x, y
 
+    def mouse_click_callback(self, msg):
+        """Handle mouse clicks to test the homography transformation"""
+        try:
+            u = float(msg.x)
+            v = float(msg.y)
+            
+            # Transform pixel coordinates to ground plane coordinates
+            x, y = self.transformUvToXy(u, v)
+            
+            # Draw a marker at the transformed position
+            self.draw_marker(x, y, "odom")
+            
+            # Log the transformation results
+            self.get_logger().info(f"Clicked at pixel ({u}, {v}), transformed to ({x:.3f}, {y:.3f}) meters")
+        except Exception as e:
+            self.get_logger().error(f"Error processing mouse click: {e}")
+
+
     def draw_marker(self, cone_x, cone_y, message_frame):
         """
         Publish a marker to represent the cone in rviz.
         (Call this function if you want)
         """
-        marker = Marker()
-        marker.header.frame_id = message_frame
-        marker.type = marker.CYLINDER
-        marker.action = marker.ADD
-        marker.scale.x = .2
-        marker.scale.y = .2
-        marker.scale.z = .2
-        marker.color.a = 1.0
-        marker.color.r = 1.0
-        marker.color.g = .5
-        marker.pose.orientation.w = 1.0
-        marker.pose.position.x = cone_x
-        marker.pose.position.y = cone_y
-        self.marker_pub.publish(marker)
+        try:
+            marker = Marker()
+            marker.header.frame_id = message_frame
+            marker.type = marker.CYLINDER
+            marker.action = marker.ADD
+            marker.scale.x = .2
+            marker.scale.y = .2
+            marker.scale.z = .2
+            marker.color.a = 1.0
+            marker.color.r = 1.0
+            marker.color.g = .5
+            marker.pose.orientation.w = 1.0
+            marker.pose.position.x = cone_x
+            marker.pose.position.y = cone_y
+            self.marker_pub.publish(marker)
+        except Exception as e:
+            self.get_logger().error(f"Error publishing marker: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
