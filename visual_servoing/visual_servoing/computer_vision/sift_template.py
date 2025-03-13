@@ -155,7 +155,8 @@ def cd_template_matching(img, template):
 	# Remember to resize the bounding box using the highest scoring scale
 	# x1,y1 pixel will be accurate, but x2,y2 needs to be correctly scaled
 	bounding_box = ((x_min, y_min),(x_max, y_max))
-	image_print(cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2))
+	
+	# image_print(cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2))
 
 		########### YOUR CODE ENDS HERE ###########
 
