@@ -38,7 +38,7 @@ def cd_sift_ransac(img, template):
 	# Minimum number of matching features
 	MIN_MATCH = 10 # Adjust this value as needed
 	# Create SIFT
-	sift = cv2.xfeatures2d.SIFT_create()
+	sift = cv2.SIFT_create()
 
 	# Compute SIFT on template and test image
 	kp1, des1 = sift.detectAndCompute(template,None)
@@ -67,8 +67,33 @@ def cd_sift_ransac(img, template):
 		pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
 
 		########## YOUR CODE STARTS HERE ##########
+		# get points to include
+		destPoints =  cv2.perspectiveTransform(pts, M)
+		# init point vars
+		flag = False
+		x_min = 0
+		x_max = 0
+		y_min = 0
+		y_max = 0
+	
+		# go through points to include
+		for i in range(destPoints.shape[0]):
+			this_x = destPoints[i, 0, 0]
+			this_y = destPoints[i, 0, 1]
+			# init x and y values if not already
+			if flag is False:
+				x_min = round(this_x)
+				y_min = round(this_y)
+				x_max = round(this_x)
+				y_max = round(this_y)
+				flag = True			
+			# update if necessary
+			x_min = min(x_min, round(this_x))
+			x_max = max(x_max, round(this_x))
+			y_min = min(y_min, round(this_y))
+			y_max = max(y_max, round(this_y))
 
-		x_min = y_min = x_max = y_max = 0
+		# image_print(cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2))
 
 		########### YOUR CODE ENDS HERE ###########
 
@@ -114,10 +139,24 @@ def cd_template_matching(img, template):
 		########## YOUR CODE STARTS HERE ##########
 		# Use OpenCV template matching functions to find the best match
 		# across template scales.
+		best_value = None
 
-		# Remember to resize the bounding box using the highest scoring scale
-		# x1,y1 pixel will be accurate, but x2,y2 needs to be correctly scaled
-		bounding_box = ((0,0),(0,0))
+		result = cv2.matchTemplate(img_canny, resized_template, cv2.TM_CCOEFF_NORMED)
+		minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(result, None)
+		if (best_value is None) or (best_value < maxVal):
+			best_value = maxVal
+			best_match = maxLoc
+
+			x_min = best_match[0]
+			y_min = best_match[1]
+			x_max = x_min + int(w)
+			y_max = y_min + int(h)
+
+	# Remember to resize the bounding box using the highest scoring scale
+	# x1,y1 pixel will be accurate, but x2,y2 needs to be correctly scaled
+	bounding_box = ((x_min, y_min),(x_max, y_max))
+	image_print(cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2))
+
 		########### YOUR CODE ENDS HERE ###########
 
 	return bounding_box
