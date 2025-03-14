@@ -71,29 +71,23 @@ def cd_sift_ransac(img, template):
 		destPoints =  cv2.perspectiveTransform(pts, M)
 		# init point vars
 		flag = False
-		x_min = 0
-		x_max = 0
-		y_min = 0
-		y_max = 0
+		x_min = float("inf")
+		x_max = -float("inf")
+		y_min = float("inf")
+		y_max = -float("inf")
 	
 		# go through points to include
 		for i in range(destPoints.shape[0]):
 			this_x = destPoints[i, 0, 0]
 			this_y = destPoints[i, 0, 1]
-			# init x and y values if not already
-			if flag is False:
-				x_min = round(this_x)
-				y_min = round(this_y)
-				x_max = round(this_x)
-				y_max = round(this_y)
-				flag = True			
-			# update if necessary
+			# update vars if necessary
 			x_min = min(x_min, round(this_x))
 			x_max = max(x_max, round(this_x))
 			y_min = min(y_min, round(this_y))
 			y_max = max(y_max, round(this_y))
 
-		# image_print(cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2))
+		# print bounding box
+		# image_print(cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (255, 0, 0), 2))
 
 		########### YOUR CODE ENDS HERE ###########
 
@@ -155,7 +149,8 @@ def cd_template_matching(img, template):
 	# Remember to resize the bounding box using the highest scoring scale
 	# x1,y1 pixel will be accurate, but x2,y2 needs to be correctly scaled
 	bounding_box = ((x_min, y_min),(x_max, y_max))
-	
+
+	# print bounding box
 	# image_print(cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2))
 
 		########### YOUR CODE ENDS HERE ###########
