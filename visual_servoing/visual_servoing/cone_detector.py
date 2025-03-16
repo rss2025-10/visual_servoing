@@ -41,17 +41,74 @@ class ConeDetector(Node):
         # publish this pixel (u, v) to the /relative_cone_px topic; the homography transformer will
         # convert it to the car frame.
 
-        #################################
-        # YOUR CODE HERE
-        # detect the cone and publish its
-        # pixel location in the image.
-        # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-        #################################
-
-        image = self.bridge.imgmsg_to_cv2(image_msg, "bgr8")
-
-        debug_msg = self.bridge.cv2_to_imgmsg(image, "bgr8")
-        self.debug_pub.publish(debug_msg)
+        try:
+            # Convert ROS Image message to OpenCV image
+            image = self.bridge.imgmsg_to_cv2(image_msg, "bgr8")
+            
+            # Create a binary mask to keep only the middle section of the image
+            height, width = image.shape[:2]
+            mask = np.zeros((height, width), dtype=np.uint8)
+            
+            # Define the middle section parameters (adjust these as needed)
+            middle_width_percent = 1.0  # Keep middle 60% horizontally
+            middle_height_percent = 0.3  # Keep middle 80% vertically
+            
+            # Calculate mask boundaries
+            left_boundary = int(width * (1 - middle_width_percent) / 2)
+            right_boundary = int(width * (1 - (1 - middle_width_percent) / 2))
+            top_boundary = int(height * (1 - middle_height_percent) / 2)
+            bottom_boundary = int(height * (1 - (1 - middle_height_percent) / 2))
+            
+            # Create the mask with the middle section set to 255 (white)
+            mask[top_boundary:bottom_boundary, left_boundary:right_boundary] = 255
+            
+            # Apply the mask to the image
+            masked_image = cv2.bitwise_and(image, image, mask=mask)
+            
+            # Apply color segmentation to detect the cone
+            (min_pt, max_pt) = cd_color_segmentation(masked_image)
+            
+            # Extract the bounding box coordinates
+            xmin, ymin = min_pt
+            xmax, ymax = max_pt
+            
+            # Calculate the center pixel at the bottom of the bounding box
+            # This is the point that corresponds to the ground plane
+            u = (xmin + xmax) / 2  # center x-coordinate
+            v = float(ymax)  # bottom y-coordinate
+            
+            # Create and publish the cone location message
+            cone_msg = ConeLocationPixel()
+            cone_msg.u = u
+            cone_msg.v = v
+            self.cone_pub.publish(cone_msg)
+            
+            # Draw the bounding box and bottom center point on the debug image
+            debug_img = image.copy()
+            
+            # Draw the mask boundaries for debugging
+            height, width = image.shape[:2]
+            left_boundary = int(width * (1 - middle_width_percent) / 2)
+            right_boundary = int(width * (1 - (1 - middle_width_percent) / 2))
+            top_boundary = int(height * (1 - middle_height_percent) / 2)
+            bottom_boundary = int(height * (1 - (1 - middle_height_percent) / 2))
+            
+            # Blue rectangle showing the mask boundaries
+            cv2.rectangle(debug_img, (left_boundary, top_boundary), (right_boundary, bottom_boundary), (255, 0, 0), 2)
+            
+            # Green bounding box for the cone
+            cv2.rectangle(debug_img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+            # Red circle at bottom center
+            cv2.circle(debug_img, (int(u), int(v)), 5, (0, 0, 255), -1)
+            
+            # Publish the debug image
+            debug_msg = self.bridge.cv2_to_imgmsg(debug_img, "bgr8")
+            self.debug_pub.publish(debug_msg)
+            
+        except CvBridgeError as e:
+            self.get_logger().error(f"CV Bridge error: {e}")
+        except Exception as e:
+            self.get_logger().error(f"No cone detected: {e}")
 
 def main(args=None):
     rclpy.init(args=args)

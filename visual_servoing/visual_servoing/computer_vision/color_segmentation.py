@@ -14,14 +14,18 @@ import os
 #  v
 ###############################################################
 
+# Set this to True to enable image display (requires GUI)
+DISPLAY_IMAGES = False
+
 def image_print(img):
 	"""
 	Helper function to print out images, for debugging. Pass them in as a list.
 	Press any key to continue.
 	"""
-	cv2.imshow("image", img)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
+	if DISPLAY_IMAGES:
+		cv2.imshow("image", img)
+		cv2.waitKey(0)
+		cv2.destroyAllWindows()
 
 def cd_color_segmentation(img, template=None):
 	"""
@@ -38,8 +42,8 @@ def cd_color_segmentation(img, template=None):
 	# from GeeksForGeeks
 
 	eroded_img = cv2.erode(img, np.ones((5, 5), np.uint8))
-	image_print(eroded_img)
-	image_print(cv2.erode(img, np.ones((10, 10), np.uint8)))
+	# image_print(eroded_img)
+	# image_print(cv2.erode(img, np.ones((10, 10), np.uint8)))
 	dilated_img = cv2.dilate(eroded_img, np.ones((10,10), np.uint8))
 	# image_print(dilated_img)
 	hsv_version = cv2.cvtColor(dilated_img, cv2.COLOR_BGR2HSV)

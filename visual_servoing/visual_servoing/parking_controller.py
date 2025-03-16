@@ -26,27 +26,31 @@ class ParkingController(Node):
         self.create_subscription(ConeLocation, "/relative_cone", 
             self.relative_cone_callback, 1)
 
-        self.parking_distance = .75 # meters; try playing with this number!
+        self.parking_distance = 0.5 # meters; try playing with this number!
         self.relative_x = 0
         self.relative_y = 0
         self.car_length = 0.325
 
         self.get_logger().info("Parking Controller Initialized")
 
-        self.backing_up = True
+        self.backing_up = False
 
     def relative_cone_callback(self, msg):
         self.relative_x = msg.x_pos
         self.relative_y = msg.y_pos
+        self.get_logger().info(f"[INFO] relative_x: {self.relative_x}, relative_y: {self.relative_y}")
         drive_cmd = AckermannDriveStamped()
         distance_error = np.sqrt(self.relative_x**2 + self.relative_y**2)
-        if self.relative_x < 0:
-            self.backing_up = True
+        # if self.relative_x < 0:
+        #     self.backing_up = True
 
 
         if self.backing_up:
-            if self.relative_x < self.parking_distance * 2:
-                drive_cmd.drive.speed = -float(1)
+            if self.relative_x < self.parking_distance:
+                # Scale reverse speed proportionally to distance error
+                # Minimum speed of -0.3 when close, up to -1.0 when far
+                scale_factor = min(1.0, max(0.3, abs(self.relative_x - self.parking_distance)))
+                drive_cmd.drive.speed = -float(scale_factor)
                 drive_cmd.drive.steering_angle = float(0)
             else:
                 self.backing_up = False
@@ -69,10 +73,11 @@ class ParkingController(Node):
                 # steering_angle = np.arctan(2 * self.car_length * np.sin(eta), lookahead_distance)
                 steering_angle = np.arctan(2 * self.car_length * np.sin(eta) / lookahead_distance)[0]
                 drive_cmd.drive.steering_angle = 5* steering_angle
-                drive_cmd.drive.speed = float(1)
-
-
-
+                
+                # Scale forward speed based on distance error
+                # Slower when closer to the target (0.3 minimum), up to 1.0 when far
+                scale_factor = min(1.0, max(0.3, distance_error))
+                drive_cmd.drive.speed = float(scale_factor)
 
         # self.get_logger().info(f'[INFO] angle: {steering_angle}')
         self.drive_pub.publish(drive_cmd)
