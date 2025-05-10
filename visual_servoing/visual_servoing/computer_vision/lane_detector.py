@@ -16,7 +16,7 @@ import math
 
 # ------------------- CONSTANTS -------------------
 GAUSSIAN_KERNEL = (5, 5)
-THRESHOLD_VALUE = 180
+THRESHOLD_VALUE = 220
 HOUGH_RHO = 1
 HOUGH_THETA = math.pi / 180
 HOUGH_THRESHOLD = 50
@@ -141,7 +141,7 @@ def detect_lines(warped_binary):
     for line in lines:
         x1, y1, x2, y2 = line[0]
         # Skip nearly horizontal lines (angle < 45°)
-        if abs(math.degrees(math.atan2((y2 - y1), (x2 - x1)))) < 45:
+        if abs(math.degrees(math.atan2((y2 - y1), (x2 - x1)))) < 60:
             continue
         # Separate left and right based on the midpoint
         line_mid = (x1 + x2) / 2.0
@@ -159,6 +159,13 @@ def detect_lines(warped_binary):
     right_candidate = max(right_lines, key=line_length) if right_lines else None
 
     return left_candidate, right_candidate
+
+def overlay_lane_line(orig_image, line_pts, color, thickness=4):
+    """Draw a line defined by two points on orig_image."""
+    pt1 = tuple(np.int32(line_pts[0]))
+    pt2 = tuple(np.int32(line_pts[1]))
+    cv2.line(orig_image, pt1, pt2, color, thickness)
+    return orig_image
 
 def overlay_centerline(orig_image, line_pts, color=(255, 0, 0), thickness=5):
     """Draw a line defined by two points on orig_image."""
@@ -205,14 +212,47 @@ def detect_lanes(rgb_image):
     left_line, right_line = detect_lines(warped_roi)
     # If we cannot obtain both lines, return the original image.
     output_image = rgb_image.copy()
-    if left_line is None or right_line is None:
+    if left_line is None and right_line is None:
         return output_image, None, None
 
+    # Draw left and right lane lines (if they exist)
+    # Unwarp left and right lines to original image coordinates
+    def unwarp_line(line, image):
+        h, w = roi.shape[:2]
+        src_points = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
+        dest_points = np.float32([[0, 0], [w, 0], [w * WARP_BOTTOM_RIGHT_MULT, h], [w * WARP_BOTTOM_LEFT_MULT, h]])
+        roi_offset = orig_h // 2
+        inverse_M = cv2.getPerspectiveTransform(dest_points, src_points)
+        # line: ((x1, y1), (x2, y2))
+        pts = np.array([line[0], line[1]], dtype=np.float32).reshape(-1, 1, 2)
+        unwarped = cv2.perspectiveTransform(pts, inverse_M)
+        unwarped_line = unwarped.reshape(-1, 2)
+        unwarped_line[:, 1] += roi_offset
+        return unwarped_line
+
+    if left_line is not None:
+        left_line_unwarped = unwarp_line(left_line, rgb_image)
+        output_image = overlay_lane_line(output_image, left_line_unwarped, color=(0, 255, 0), thickness=4)  # Green
+    if right_line is not None:
+        right_line_unwarped = unwarp_line(right_line, rgb_image)
+        output_image = overlay_lane_line(output_image, right_line_unwarped, color=(0, 0, 255), thickness=4)  # Red
+
+    # If one line is missing, add an offset to the other line
+    if left_line is None:
+        left_line = right_line
+        left_line[0][0] += 100
+        left_line[1][0] += 100
+    if right_line is None:
+        right_line = left_line
+        right_line[0][0] -= 100
+        right_line[1][0] -= 100
+
+    # Compute the centerline.
     center_line_warped = averageCenterLine(left_line, right_line, orig_h)
     # Unwarp the centerline back into original image coordinates.
     center_line_unwarped = unwarp_centerline(center_line_warped, rgb_image)
     # Overlay the centerline on the original image.
-    output_image = overlay_centerline(output_image, center_line_unwarped)
+    output_image = overlay_centerline(output_image, center_line_unwarped, color=(255, 0, 0), thickness=5)  # Blue
 
     # Compute x-position: use the bottom endpoint of the centerline.
     x_position = center_line_unwarped[1, 0]

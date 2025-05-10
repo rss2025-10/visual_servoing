@@ -13,9 +13,6 @@
   <!-- <node pkg="visual_servoing" name="lane_detector" exec="lane_detector" output="screen">
   </node> -->
 
-  <node pkg="visual_servoing" name="homography_transformer" exec="homography_transformer" output="screen">
-  </node>
-
   <!-- <node pkg="image_transport" name="republish" exec="republish" args="raw in:=/cone_debug_img out:=/cone_debug_img_compressed" output="screen"></node> -->
 
 </launch>

@@ -30,12 +30,13 @@ class RacingController(Node):
         self.declare_parameter("camera_topic", "/camera/rgb/image_raw")
         self.declare_parameter("error_topic", "/lane_error")  # New parameter for error topic
         self.declare_parameter("car_length", 0.325)          # meters
-        self.declare_parameter("lookahead_distance", 2.5)    # meters, reduced from 1.0
-        self.declare_parameter("max_speed", 2.0)             # maximum forward speed
+        self.declare_parameter("lookahead_distance", 3.0)    # meters, reduced from 1.0
+        self.declare_parameter("max_speed", 4.0)             # maximum forward speed
         self.declare_parameter("road_width", 0.89)            # estimated road width in meters
         self.declare_parameter("lateral_filter_coeff", 0.7)  # Filter coefficient for lateral offset
         self.declare_parameter("steering_damping", 0.3)      # Damping coefficient for steering
-        self.declare_parameter("steering_bias", -0.01)       # Bias correction for mechanical veer (positive for right, negative for left)
+        self.declare_parameter("steering_bias", -0.0125)       # Bias correction for mechanical veer (positive for right, negative for left)
+        self.declare_parameter("debug_image_topic", "/lane_debug_img")  # New parameter for debug image
 
         self.drive_topic = self.get_parameter("drive_topic").value
         self.camera_topic = self.get_parameter("camera_topic").value
@@ -47,6 +48,7 @@ class RacingController(Node):
         self.lateral_filter_coeff = self.get_parameter("lateral_filter_coeff").value
         self.steering_damping = self.get_parameter("steering_damping").value
         self.steering_bias = self.get_parameter("steering_bias").value
+        self.debug_image_topic = self.get_parameter("debug_image_topic").value
         self.get_logger().info(self.drive_topic)
         self.get_logger().info(f"self.camera_topic: {self.camera_topic}")
         self.get_logger().info(f"self.error_topic: {self.error_topic}")  # Log error topic
@@ -69,6 +71,9 @@ class RacingController(Node):
         
         # Publisher for error/offset data (for visualization)
         self.error_pub = self.create_publisher(Float32, self.error_topic, 10)
+        
+        # Publisher for visualization image (lane detection debug)
+        self.debug_image_pub = self.create_publisher(Image, self.debug_image_topic, 10)
         
         # Subscription for camera images.
         self.create_subscription(Image, self.camera_topic, self.image_callback, 1)
@@ -97,6 +102,11 @@ class RacingController(Node):
         # Process the image to detect lanes.
         output_img, x_position, theta = lane_detector.detect_lanes(rgb_image)
         
+        # Publish the visualization image (convert output_img RGB to BGR for ROS)
+        debug_bgr = cv2.cvtColor(output_img, cv2.COLOR_RGB2BGR)
+        debug_msg = self.bridge.cv2_to_imgmsg(debug_bgr, encoding='bgr8')
+        self.debug_image_pub.publish(debug_msg)
+
         # If lane detection fails, send zero command
         drive_cmd = AckermannDriveStamped()
         if x_position is None:
@@ -124,7 +134,7 @@ class RacingController(Node):
 
         # Publish the lateral offset error for visualization
         error_msg = Float32()
-        error_msg.data = float(filtered_lateral_offset)
+        error_msg.data = float(abs(filtered_lateral_offset))
         self.error_pub.publish(error_msg)
 
         # Compute the angle to the target in the vehicle coordinate system.
@@ -132,6 +142,8 @@ class RacingController(Node):
 
         # Pure pursuit steering law with added damping
         raw_steering_angle = math.atan2(2.0 * self.car_length * math.sin(alpha), self.lookahead_distance)
+        
+        # self.get_logger().info(f"Raw steering ang: {raw_steering_angle}")
         
         # Apply damping to steering angle to reduce oscillations
         damped_steering_angle = ((1 - self.steering_damping) * raw_steering_angle + 
